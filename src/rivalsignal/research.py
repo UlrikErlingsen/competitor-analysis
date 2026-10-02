@@ -1,0 +1,53 @@
+"""Primary references and the boundary between theory and this implementation."""
+SOURCES = [
+    {"authors": "Ming-Jer Chen", "year": 1996,
+     "title": "Competitor Analysis and Interfirm Rivalry: Toward a Theoretical Integration",
+     "url": "https://doi.org/10.5465/amr.1996.9602161567",
+     "basis": "Academy of Management Review; theoretical article, publisher abstract verified.",
+     "finding": "Connects competitor analysis with interfirm rivalry through market commonality and resource similarity, using a pairwise focal-firm perspective.",
+     "application": "Keep market overlap and capability resemblance separate and explicitly relative to a focal company. Our weighted yes/no coding is an application-defined proxy, not a replication of Chen's measures or a validated threat score."},
+    {"authors": "Mark Bergen and Margaret A. Peteraf", "year": 2002,
+     "title": "Competitor identification and competitor analysis: a broad-based managerial approach",
+     "url": "https://doi.org/10.1002/mde.1059", "access": "https://assets.csom.umn.edu/assets/71542.pdf",
+     "basis": "Managerial and Decision Economics; author-hosted full paper at University of Minnesota.",
+     "finding": "Broadens competitor identification through customer needs and resource equivalence, helping surface indirect and potential competition.",
+     "application": "Include indirect rivals, potential entrants and substitutes in the research brief. A competitor's absence from a familiar industry category does not exclude it from the customer choice set."},
+    {"authors": "Ming-Jer Chen, Kuo-Hsien Su and Wenpin Tsai", "year": 2007,
+     "title": "Competitive Tension: The Awareness-Motivation-Capability Perspective",
+     "url": "https://doi.org/10.5465/amj.2007.24162081",
+     "basis": "Academy of Management Journal; empirical study, publisher abstract verified.",
+     "finding": "Examines perceived competitive tension through relative scale, rivals' attack volume and capability to contest, using the awareness–motivation–capability perspective.",
+     "application": "Use awareness, motivation and capability as distinct prompts when examining a response hypothesis. The app does not estimate this study's model or convert these prompts into response probabilities."},
+    {"authors": "David B. Montgomery, Marian Chapman Moore and Joel E. Urbany", "year": 2005,
+     "title": "Reasoning About Competitive Reactions: Evidence from Executives",
+     "url": "https://doi.org/10.1287/mksc.1040.0076",
+     "access": "https://gsbpreserve.stanford.edu/view/34771/reasoning-about-competitive-reactions-evidence-from-executives",
+     "basis": "Marketing Science; Stanford author record and abstract verified.",
+     "finding": "Three exploratory studies find limited strategic reasoning about competitors' reactions, alongside difficulty obtaining information and uncertainty about behavior.",
+     "application": "Write competing responses, counterevidence and observable signals before deciding how to react. This is a structured reasoning aid, not evidence that the app improves forecasting accuracy."},
+    {"authors": "Klaudia Jaźwińska and Aisvarya Chandrasekar", "year": 2025,
+     "title": "AI Search Has a Citation Problem",
+     "url": "https://www.cjr.org/tow_center/we-compared-eight-ai-search-engines-theyre-all-bad-at-citing-news.php",
+     "basis": "Tow Center / Columbia Journalism Review original research report; not a peer-reviewed competitor-analysis study.",
+     "finding": "Tests of news-article retrieval found citation and attribution errors across the sampled generative search tools.",
+     "application": "Treat pasted AI research as a draft and require source-alignment review. This task-specific 2025 audit does not establish current error rates for every model or for competitor research."},
+]
+
+SCOPE = [
+    ("Position Signal", "Customer perceptions and survey-based positioning", "Rival uses company evidence and strategic capabilities, not perceptual PCA."),
+    ("Listen Signal", "Media mentions, share of voice and sentiment", "Rival reviews claims and response hypotheses; it does not collect a media feed."),
+    ("Prospect Signal", "Company discovery and sales prioritization", "Rival studies competitive relationships; it does not generate leads."),
+    ("Gate Signal", "Bounded investment decisions and scenario economics", "Rival prepares competitor evidence and contingencies; it does not approve investments."),
+    ("Choice / Tag / Shift", "Preferences, pricing evidence and cannibalization", "Rival does not estimate demand, optimal prices, switching or causal sales effects."),
+]
+
+LIMITS = [
+    "Theory informs the questions. It does not validate this app's coding, weights, completeness or predictive accuracy.",
+    "The map reports weighted coding under a declared scope. Unknown-data bounds are not confidence intervals, probabilities, market shares or a danger ranking.",
+    "Both dimensions are relative to the focal company. Broad market contact need not imply aggressive rivalry; incentives, mutual restraint and action context matter.",
+    "A source URL is not verification. Human acceptance records a source-alignment judgment, not an objective guarantee that a claim is true.",
+    "Public evidence may be incomplete, strategically selective or out of date. A capability not found online remains unknown, not absent.",
+    "Source families are declared groupings. Syndicated copies of one announcement do not establish independent corroboration.",
+    "AI draft import always starts without human reviews. Saved-project restore explicitly restores prior review decisions; it does not authenticate the author or recheck sources.",
+    "Response scenarios remain hypotheses even when their supporting observations are reviewed. No external AI, automatic scraping, monitoring or messaging runs inside this app.",
+]
