@@ -1,0 +1,12 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using this metadata. The Rival Signal name is informally screened, not legally cleared."
+title: "Rival Signal: Competitor evidence. Better response questions."
+type: software
+authors:
+  - family-names: Erlingsen
+    given-names: Ulrik
+version: 0.1.0
+date-released: 2026-10-03
+license: AGPL-3.0-or-later
+repository-code: "https://github.com/UlrikErlingsen/competitor-analysis"
+abstract: "Review competitor research from desk work or your own AI source by source, map where rivals overlap with you, and stress-test their likely responses before treating a story as fact."
