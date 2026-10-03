@@ -104,6 +104,20 @@ def test_rejects_ambiguous_or_non_json_responses(payload):
         parse_json(payload)
 
 
+def test_json_size_limit_matches_the_50_mb_upload_cap():
+    padded = "{" + " " * (6 * 1024 * 1024) + '"ok": true}'  # above the old 5 MB limit
+    assert parse_json(padded) == {"ok": True}
+    with pytest.raises(DataProblem, match="50 MB"):
+        parse_json("{" + " " * (50 * 1024 * 1024) + "}")
+
+
+def test_oversized_collections_fail_fast_with_a_clear_message():
+    d = demo_data()
+    d["sources"] = [dict(d["sources"][0], id=f"S{i}") for i in range(101)]
+    with pytest.raises(DataProblem, match="sources: at most 100 records"):
+        validate_data(d)
+
+
 def test_fenced_and_bom_json_supported():
     assert parse_json(b'\xef\xbb\xbf```json\n{"ok":true}\n```') == {"ok": True}
 

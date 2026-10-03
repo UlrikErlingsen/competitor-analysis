@@ -12,6 +12,9 @@ from urllib.parse import urlsplit
 from jsonschema import Draft202012Validator, FormatChecker
 
 
+MAX_JSON_MB = 50  # matches the local upload cap; the record limits in SCHEMA keep valid files far smaller
+
+
 class DataProblem(ValueError):
     """An actionable contract or evidence problem."""
 
@@ -69,8 +72,8 @@ def parse_json(payload: str | bytes) -> dict:
             payload = payload.decode("utf-8-sig")
         except UnicodeError as exc:
             raise DataProblem("Use UTF-8 JSON text.") from exc
-    if len(payload.encode("utf-8")) > 5 * 1024 * 1024:
-        raise DataProblem("Use JSON smaller than 5 MB.")
+    if len(payload.encode("utf-8")) > MAX_JSON_MB * 1024 * 1024:
+        raise DataProblem(f"Use JSON smaller than {MAX_JSON_MB} MB.")
     payload = payload.strip().lstrip("\ufeff")
     fence = re.fullmatch(r"```(?:json)?\s*\n(.*?)\n```", payload, re.S | re.I)
     if fence:
@@ -127,6 +130,11 @@ def assessment_key(competitor: str, criterion: str) -> str:
 
 
 def validate_data(data: dict) -> dict:
+    # Fail fast on oversized collections before validating every record against the full schema.
+    if isinstance(data, dict):
+        for name, spec in SCHEMA["properties"].items():
+            if "maxItems" in spec and isinstance(data.get(name), list) and len(data[name]) > spec["maxItems"]:
+                raise DataProblem(f"{name}: at most {spec['maxItems']} records are allowed; found {len(data[name])}.")
     errors = sorted(Draft202012Validator(SCHEMA, format_checker=FormatChecker()).iter_errors(data),
                     key=lambda e: str(list(e.absolute_path)))
     if errors:

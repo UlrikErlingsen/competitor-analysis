@@ -5,6 +5,7 @@ from copy import deepcopy
 from datetime import date, datetime
 from html import escape
 import json
+import os
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -17,7 +18,8 @@ from rivalsignal.examples import demo_data, demo_project
 from rivalsignal.exports import evidence_pack, printable_html, project_bytes
 from rivalsignal.prompts import build_research_prompt, repair_prompt, research_skeleton
 from rivalsignal.research import LIMITS, SOURCES, SCOPE
-from rivalsignal.schema import DataProblem, SCHEMA, assessment_key, import_research, new_project, restore_project, validate_data
+from rivalsignal.schema import (DataProblem, MAX_JSON_MB, SCHEMA, assessment_key, import_research, new_project,
+                                restore_project, validate_data)
 from rivalsignal.ui import signal_theme as sig
 
 NS = "rival"
@@ -27,6 +29,11 @@ STATUS = ["pending", "accepted", "rejected"]
 
 def k(name):
     return f"{NS}:{name}"
+
+
+def in_hub():
+    """Signal Hub sets SIGNAL_HUB=1: session memory only, no file writes, no network calls."""
+    return os.environ.get("SIGNAL_HUB") == "1"
 
 
 def today():
@@ -88,13 +95,18 @@ def brief_and_prompt():
     data = project()["data"]
     with st.expander("Edit the research brief and start a new case", expanded=not data["claims"]):
         st.info("Starting a case replaces the active evidence and reviews in this session. Download the current project first if you want to keep it.")
-        with st.form(k("brief_form:" + revision())):
-            focal = st.text_input("Your company or offering", data["brief"]["focal_company"], max_chars=120)
-            market = st.text_area("Customer need, geography and market boundary", data["brief"]["market"], max_chars=600)
-            decision = st.text_area("The strategic move you are considering", data["brief"]["decision"], max_chars=1000)
+        rev = revision()
+        with st.form(k("brief_form:" + rev)):
+            focal = st.text_input("Your company or offering", data["brief"]["focal_company"], max_chars=120,
+                                  key=k("brief_focal:" + rev))
+            market = st.text_area("Customer need, geography and market boundary", data["brief"]["market"], max_chars=600,
+                                  key=k("brief_market:" + rev))
+            decision = st.text_area("The strategic move you are considering", data["brief"]["decision"], max_chars=1000,
+                                    key=k("brief_decision:" + rev))
             c1, c2 = st.columns(2)
-            as_of = c1.date_input("Research cutoff", date.fromisoformat(data["brief"]["as_of"]))
-            horizon = c2.number_input("Response horizon in days", 1, 1095, data["brief"]["horizon_days"])
+            as_of = c1.date_input("Research cutoff", date.fromisoformat(data["brief"]["as_of"]), key=k("brief_as_of:" + rev))
+            horizon = c2.number_input("Response horizon in days", 1, 1095, data["brief"]["horizon_days"],
+                                      key=k("brief_horizon:" + rev))
             st.markdown("**Comparison criteria**")
             st.caption("Market criteria describe markets YOU serve; resource criteria describe capabilities YOU possess. "
                        "Keep criteria distinct. Weights express importance within each dimension and are normalized separately.")
@@ -106,7 +118,7 @@ def brief_and_prompt():
             competitors = st.data_editor(pd.DataFrame(data["competitors"]), num_rows="dynamic", hide_index=True, width="stretch",
                                          column_config={"type": st.column_config.SelectboxColumn(options=["direct", "indirect", "potential", "substitute"])},
                                          key=k("competitor_editor:" + revision()))
-            if st.form_submit_button("Start case from this brief", type="primary"):
+            if st.form_submit_button("Start case from this brief", type="primary", key=k("brief_submit:" + rev)):
                 brief = {"focal_company": focal, "market": market, "decision": decision, "as_of": as_of.isoformat(), "horizon_days": int(horizon)}
                 skeleton = research_skeleton(brief, criteria.to_dict("records"), competitors.fillna("").to_dict("records"))
                 replace_project(new_project(skeleton, "User-defined case — awaiting research"))
@@ -180,12 +192,14 @@ def _import_draft():
 
 def _review_form(kind, record_id):
     review = project()["reviews"][kind].get(record_id, {})
-    with st.form(k(f"review:{kind}:{record_id}:{revision()}")):
-        status = st.selectbox("Review decision", STATUS, index=STATUS.index(review.get("status", "pending")))
-        reviewer = st.text_input("Reviewed by", review.get("reviewer", ""), max_chars=120)
-        note = st.text_area("What did you check?", review.get("note", ""), max_chars=1500,
+    form = f"review:{kind}:{record_id}:{revision()}"
+    with st.form(k(form)):
+        status = st.selectbox("Review decision", STATUS, index=STATUS.index(review.get("status", "pending")),
+                              key=k(form + ":status"))
+        reviewer = st.text_input("Reviewed by", review.get("reviewer", ""), max_chars=120, key=k(form + ":reviewer"))
+        note = st.text_area("What did you check?", review.get("note", ""), max_chars=1500, key=k(form + ":note"),
                             help="For claims, record whether the source supports the wording and date. For assessments, explain the coding against the definition.")
-        if st.form_submit_button("Save review", type="primary"):
+        if st.form_submit_button("Save review", type="primary", key=k(form + ":save")):
             replace_project(set_review(project(), kind, record_id, status, reviewer, note, today().isoformat()))
             st.rerun()
 
@@ -197,11 +211,13 @@ def review():
     data = project()["data"]
     st.subheader("Evidence freshness")
     st.caption("The cutoff uses the underlying observation date. Opening an old page today does not make its evidence new.")
-    with st.form(k("freshness:" + revision())):
+    rev = revision()
+    with st.form(k("freshness:" + rev)):
         c1, c2 = st.columns(2)
-        as_of = c1.date_input("Analysis as-of date", date.fromisoformat(data["brief"]["as_of"]))
-        days = c2.number_input("Maximum evidence age in days", 1, 3650, project()["policy"]["max_age_days"])
-        if st.form_submit_button("Update freshness policy"):
+        as_of = c1.date_input("Analysis as-of date", date.fromisoformat(data["brief"]["as_of"]), key=k("fresh_as_of:" + rev))
+        days = c2.number_input("Maximum evidence age in days", 1, 3650, project()["policy"]["max_age_days"],
+                               key=k("fresh_days:" + rev))
+        if st.form_submit_button("Update freshness policy", key=k("fresh_submit:" + rev)):
             updated = deepcopy(project())
             updated["data"]["brief"]["as_of"] = as_of.isoformat()
             updated["data"] = validate_data(updated["data"])
@@ -228,7 +244,7 @@ def review():
             if ".example/" in source["url"]:
                 st.caption("Fictional example URL — this is not a real source.")
             else:
-                st.link_button(f"Open source {source_id}", source["url"])
+                st.link_button(f"Open source {source_id}", source["url"], key=k(f"open_source:{selected}:{source_id}"))
         if not claim["source_ids"]:
             st.info("No source is cited. This inference cannot resolve a map cell.")
         _review_form("claims", selected)
@@ -255,12 +271,14 @@ def review():
                 table(pd.DataFrame(linked)[["id", "kind", "statement", "observed_date"]])
             st.caption("Effective result: " + " · ".join(assessment_readiness(project(), row)))
             with st.expander("Correct the proposed coding"):
-                with st.form(k("edit_coding:" + selected + ":" + revision())):
-                    judgment = st.selectbox("Judgment", ["yes", "no", "unknown"], index=["yes", "no", "unknown"].index(row["judgment"]))
+                form = "edit_coding:" + selected + ":" + revision()
+                with st.form(k(form)):
+                    judgment = st.selectbox("Judgment", ["yes", "no", "unknown"], key=k(form + ":judgment"),
+                                            index=["yes", "no", "unknown"].index(row["judgment"]))
                     ids = [c["id"] for c in data["claims"] if c["competitor_id"] == row["competitor_id"]]
-                    refs = st.multiselect("Supporting observations", ids, default=row["claim_ids"])
-                    rationale = st.text_area("Coding rationale", row["rationale"], max_chars=1200)
-                    if st.form_submit_button("Save correction and reset its review"):
+                    refs = st.multiselect("Supporting observations", ids, default=row["claim_ids"], key=k(form + ":refs"))
+                    rationale = st.text_area("Coding rationale", row["rationale"], max_chars=1200, key=k(form + ":rationale"))
+                    if st.form_submit_button("Save correction and reset its review", key=k(form + ":save")):
                         updated = deepcopy(project())
                         target = next(a for a in updated["data"]["assessments"] if assessment_key(a["competitor_id"], a["criterion_id"]) == selected)
                         target.update(judgment=judgment, claim_ids=refs, rationale=rationale)
@@ -360,18 +378,25 @@ def response_lab():
         options = ["New hypothesis"] + [r["id"] for r in hypotheses]
         chosen = st.selectbox("Response to edit", options, key=k("response_edit_pick:" + selected))
         current = next((r for r in hypotheses if r["id"] == chosen), {})
-        with st.form(k("response_form:" + selected + ":" + chosen + ":" + revision())):
-            title = st.text_input("Possible competitor response", current.get("response", ""), max_chars=400)
-            fields = {label: st.text_area(label.title(), current.get(label, ""), max_chars=1200)
+        form = "response_form:" + selected + ":" + chosen + ":" + revision()
+        with st.form(k(form)):
+            title = st.text_input("Possible competitor response", current.get("response", ""), max_chars=400,
+                                  key=k(form + ":response"))
+            fields = {label: st.text_area(label.title(), current.get(label, ""), max_chars=1200, key=k(form + ":" + label))
                       for label in ["awareness", "motivation", "capability"]}
             claim_ids = [c["id"] for c in data["claims"] if c["competitor_id"] == selected]
-            support = st.multiselect("Supporting claim IDs", claim_ids, default=current.get("supporting_claim_ids", []))
-            counter = st.multiselect("Counterevidence claim IDs", claim_ids, default=current.get("counter_claim_ids", []))
-            watch = st.text_area("Observable watch signal", current.get("watch_for", ""), max_chars=1200)
-            contingency = st.text_area("Our contingency", current.get("our_contingency", ""), max_chars=1200)
-            owner = st.text_input("Responsible owner", current.get("owner", ""), max_chars=120)
-            next_check = st.text_input("Next check · YYYY-MM-DD, or leave blank", current.get("next_check") or "")
-            if st.form_submit_button("Save hypothesis", type="primary"):
+            support = st.multiselect("Supporting claim IDs", claim_ids, default=current.get("supporting_claim_ids", []),
+                                     key=k(form + ":support"))
+            counter = st.multiselect("Counterevidence claim IDs", claim_ids, default=current.get("counter_claim_ids", []),
+                                     key=k(form + ":counter"))
+            watch = st.text_area("Observable watch signal", current.get("watch_for", ""), max_chars=1200,
+                                 key=k(form + ":watch_for"))
+            contingency = st.text_area("Our contingency", current.get("our_contingency", ""), max_chars=1200,
+                                       key=k(form + ":our_contingency"))
+            owner = st.text_input("Responsible owner", current.get("owner", ""), max_chars=120, key=k(form + ":owner"))
+            next_check = st.text_input("Next check · YYYY-MM-DD, or leave blank", current.get("next_check") or "",
+                                       key=k(form + ":next_check"))
+            if st.form_submit_button("Save hypothesis", type="primary", key=k(form + ":save")):
                 updated = deepcopy(project())
                 if chosen == "New hypothesis":
                     used = {r["id"] for r in data["responses"]}
@@ -398,6 +423,9 @@ def compare_export():
     st.caption("Open the HTML brief in a browser and print or save it as PDF. The ZIP includes the loaded claims, sources, "
                "review notes, criteria, results, printable brief and academic references. No external assets are required.")
     st.caption("Project fingerprint: " + fingerprint(project()))
+    if in_hub():
+        sig.note("info", "**In Signal Hub, this project lives only in your browser session.** Nothing is saved on the "
+                 "server. Download the project JSON to keep your reviews, then restore it here or in the local app.")
     with st.expander("Restore a saved project"):
         restore = st.file_uploader("Saved Rival project JSON", type=["json"], key=k("restore_upload"))
         st.write("This explicitly restores the review decisions in your file. It does not recheck the sources or authenticate who reviewed them.")
@@ -453,7 +481,8 @@ def research_limits():
     st.subheader("Limits to keep beside the output")
     for item in LIMITS:
         st.markdown("- " + item)
-    st.caption("Inputs: UTF-8 JSON up to 5 MB; at most 12 competitors, 24 criteria, 100 sources, 300 claims and 36 hypotheses. "
+    st.caption(f"Inputs: UTF-8 JSON up to {MAX_JSON_MB} MB; at most 12 competitors, 24 criteria, 100 sources, 300 claims "
+               "and 36 hypotheses. "
                "Everything stays in session memory until you explicitly download a file. There is no automatic persistence.")
 
 
