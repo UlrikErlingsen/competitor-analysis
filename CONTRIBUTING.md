@@ -1,6 +1,6 @@
 # Contributing
 
-Contributions should preserve Rival Signal’s central boundaries: uncertainty visible beside every estimate, named methods with their limits, no causal claims the design cannot support, and fictional demo data only.
+Contributions should preserve Rival Signal’s central boundaries: unknowns stay visible and never become "no", nothing counts on the map until a person has reviewed it, the app makes no AI or network calls, named methods come with their limits, no threat scores or forecasts, and fictional demo data only.
 
 Before submitting a change:
 
