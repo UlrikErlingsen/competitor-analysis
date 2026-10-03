@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rivalsignal"
-version = "1.0.0"
+version = "1.1.0"
 description = "Rival Signal: source-reviewed competitor research and response planning"
 readme = "README.md"
 requires-python = ">=3.10"

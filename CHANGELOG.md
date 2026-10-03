@@ -2,6 +2,20 @@
 
 All notable changes to Rival Signal are documented here.
 
+## [1.1.0] - 2026-10-03
+
+### Changed
+
+- **No data limits when run locally.** No maximum file size, number of rivals, criteria, sources, claims, assessments or hypotheses, text length or pasted text; the computer is the limit. The downloadable schema and the research prompt drop the length and count limits accordingly, the prompt keeps all added source material, and the repair prompt quotes the whole failed reply.
+- **Hard caps only in a public demo** (`SIGNAL_PUBLIC=1`), all defined in the new `rivalsignal.limits`: 10 MB of JSON, 1,000,000 pasted characters, 12 rivals, 24 criteria, 100 sources, 300 claims, 288 assessments, 36 hypotheses, 20 cited IDs per record and per-field text lengths. Messages say they are demo limits.
+- Upload cap raised to 10,000 MB: `.streamlit/config.toml`, launcher default `RIVALSIGNAL_MAX_UPLOAD_MB=10000`, Docker `STREAMLIT_SERVER_MAX_UPLOAD_SIZE=10000`.
+- Crowded screens are shortened with a note (map chart: first 25 rivals; response lab: first 25 hypotheses per rival); tables, analysis and exports keep everything.
+- Running out of memory shows a plain message instead of an error trace.
+
+### Fixed
+
+- New hypothesis IDs are no longer limited to H1–H999.
+
 ## [1.0.0] - 2026-10-03
 
 First public release.
