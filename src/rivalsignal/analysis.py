@@ -12,6 +12,7 @@ import json
 
 import pandas as pd
 
+from rivalsignal import limits
 from rivalsignal.schema import DataProblem, assessment_key
 
 
@@ -32,8 +33,10 @@ def set_review(project: dict, kind: str, record_id: str, status: str, reviewer: 
         raise DataProblem("The review date must be YYYY-MM-DD.") from exc
     if status == "accepted" and (not reviewer.strip() or not note.strip()):
         raise DataProblem("Record your name and a short note explaining what you checked before accepting.")
-    if len(reviewer) > 120 or len(note) > 1500:
-        raise DataProblem("Keep the reviewer name under 120 characters and the note under 1,500.")
+    name_cap, note_cap = limits.chars("name"), limits.chars("statement")
+    if (name_cap and len(reviewer) > name_cap) or (note_cap and len(note) > note_cap):
+        raise DataProblem(f"Keep the reviewer name under {name_cap} characters and the note under {note_cap:,}. "
+                          + limits.DEMO_NOTE)
     result = deepcopy(project)
     result["reviews"][kind][record_id] = {"status": status, "reviewer": reviewer.strip(),
                                           "note": note.strip(), "checked_on": checked_on}

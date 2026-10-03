@@ -21,7 +21,7 @@ if errorlevel 1 (
   )
 )
 if "%RIVALSIGNAL_PORT%"=="" set RIVALSIGNAL_PORT=8598
-if "%RIVALSIGNAL_MAX_UPLOAD_MB%"=="" set RIVALSIGNAL_MAX_UPLOAD_MB=50
+if "%RIVALSIGNAL_MAX_UPLOAD_MB%"=="" set RIVALSIGNAL_MAX_UPLOAD_MB=10000
 echo Starting Rival Signal at http://127.0.0.1:%RIVALSIGNAL_PORT% ...
 ".venv\Scripts\python.exe" -m streamlit run app.py --server.headless=true --server.address=127.0.0.1 --server.port=%RIVALSIGNAL_PORT% --server.maxUploadSize=%RIVALSIGNAL_MAX_UPLOAD_MB% --server.fileWatcherType=none --browser.gatherUsageStats=false
 if errorlevel 1 pause

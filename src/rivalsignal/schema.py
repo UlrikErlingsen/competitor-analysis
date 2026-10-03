@@ -11,8 +11,8 @@ from urllib.parse import urlsplit
 
 from jsonschema import Draft202012Validator, FormatChecker
 
-
-MAX_JSON_MB = 50  # matches the local upload cap; the record limits in SCHEMA keep valid files far smaller
+from rivalsignal import limits
+from rivalsignal.limits import DEMO, TEXT
 
 
 class DataProblem(ValueError):
@@ -36,34 +36,64 @@ def array(items, maximum=300, minimum=0):
     return {"type": "array", "items": items, "minItems": minimum, "maxItems": maximum}
 
 
+# The schema below carries the public-demo caps from limits.py (maxLength, maxItems). Run locally, the app uses
+# uncapped(): the same contract without any length or count limit. Value ranges and the ID format always apply.
 ID = {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,39}$"}
 DATE = {"type": "string", "format": "date"}
 OPTIONAL_DATE = {"anyOf": [DATE, {"type": "null"}]}
-REFS = {**array(ID, 20), "uniqueItems": True}
-BRIEF = obj({"focal_company": text(120), "market": text(600), "decision": text(1000),
+REFS = {**array(ID, DEMO["refs"]), "uniqueItems": True}
+BRIEF = obj({"focal_company": text(TEXT["name"]), "market": text(TEXT["paragraph"]), "decision": text(TEXT["decision"]),
              "as_of": DATE, "horizon_days": {"type": "integer", "minimum": 1, "maximum": 1095}})
-CRITERION = obj({"id": ID, "dimension": enum("market", "resource"), "label": text(120),
-                 "definition": text(600), "weight": {"type": "number", "exclusiveMinimum": 0, "maximum": 1000}})
-COMPETITOR = obj({"id": ID, "name": text(120), "type": enum("direct", "indirect", "potential", "substitute"),
-                  "description": text(600, 0)})
-SOURCE = obj({"id": ID, "title": text(300), "url": text(2000), "publisher": text(150),
-              "published_date": OPTIONAL_DATE, "accessed_date": DATE, "origin_group": text(100)})
+CRITERION = obj({"id": ID, "dimension": enum("market", "resource"), "label": text(TEXT["name"]),
+                 "definition": text(TEXT["paragraph"]), "weight": {"type": "number", "exclusiveMinimum": 0, "maximum": 1000}})
+COMPETITOR = obj({"id": ID, "name": text(TEXT["name"]), "type": enum("direct", "indirect", "potential", "substitute"),
+                  "description": text(TEXT["paragraph"], 0)})
+SOURCE = obj({"id": ID, "title": text(TEXT["title"]), "url": text(TEXT["url"]), "publisher": text(TEXT["publisher"]),
+              "published_date": OPTIONAL_DATE, "accessed_date": DATE, "origin_group": text(TEXT["origin_group"])})
 CLAIM = obj({"id": ID, "competitor_id": ID, "kind": enum("observation", "inference"),
-             "topic": enum("market", "resource", "move", "other"), "statement": text(1500),
+             "topic": enum("market", "resource", "move", "other"), "statement": text(TEXT["statement"]),
              "observed_date": OPTIONAL_DATE, "source_ids": REFS})
 ASSESSMENT = obj({"competitor_id": ID, "criterion_id": ID, "judgment": enum("yes", "no", "unknown"),
-                  "claim_ids": REFS, "rationale": text(1200, 0)})
-RESPONSE = obj({"id": ID, "competitor_id": ID, "response": text(400),
-                "awareness": text(1200, 0), "motivation": text(1200, 0), "capability": text(1200, 0),
+                  "claim_ids": REFS, "rationale": text(TEXT["reasoning"], 0)})
+REASONING = text(TEXT["reasoning"], 0)
+RESPONSE = obj({"id": ID, "competitor_id": ID, "response": text(TEXT["response"]),
+                "awareness": REASONING, "motivation": REASONING, "capability": REASONING,
                 "supporting_claim_ids": REFS, "counter_claim_ids": REFS,
-                "watch_for": text(1200, 0), "our_contingency": text(1200, 0),
-                "owner": text(120, 0), "next_check": OPTIONAL_DATE})
+                "watch_for": REASONING, "our_contingency": REASONING,
+                "owner": text(TEXT["name"], 0), "next_check": OPTIONAL_DATE})
 SCHEMA = {"$schema": "https://json-schema.org/draft/2020-12/schema", **obj({
     "schema_version": {"const": "1.0"}, "brief": BRIEF,
-    "criteria": array(CRITERION, 24, 2), "competitors": array(COMPETITOR, 12, 1),
-    "sources": array(SOURCE, 100), "claims": array(CLAIM, 300),
-    "assessments": array(ASSESSMENT, 288), "responses": array(RESPONSE, 36),
+    "criteria": array(CRITERION, DEMO["criteria"], 2), "competitors": array(COMPETITOR, DEMO["competitors"], 1),
+    "sources": array(SOURCE, DEMO["sources"]), "claims": array(CLAIM, DEMO["claims"]),
+    "assessments": array(ASSESSMENT, DEMO["assessments"]), "responses": array(RESPONSE, DEMO["responses"]),
 })}
+REVIEW = obj({"status": enum("pending", "accepted", "rejected"), "reviewer": text(TEXT["name"], 0),
+              "note": text(TEXT["statement"], 0), "checked_on": DATE})
+
+
+def uncapped(schema):
+    """The same contract without maxLength or maxItems: no length or count limits."""
+    if isinstance(schema, dict):
+        return {key: uncapped(value) for key, value in schema.items() if key not in {"maxLength", "maxItems"}}
+    if isinstance(schema, list):
+        return [uncapped(value) for value in schema]
+    return schema
+
+
+_LOCAL = {"research": uncapped(SCHEMA), "review": uncapped(REVIEW),
+          "records": uncapped({"sources_record": SOURCE, "claims_record": CLAIM, "responses_record": RESPONSE})}
+
+
+def active_schema() -> dict:
+    """The research schema in force: demo-capped with SIGNAL_PUBLIC=1, otherwise uncapped."""
+    return SCHEMA if limits.public() else _LOCAL["research"]
+
+
+def record_schemas() -> dict:
+    """The source, claim and response record schemas in force, for the research prompt."""
+    if limits.public():
+        return {"sources_record": SOURCE, "claims_record": CLAIM, "responses_record": RESPONSE}
+    return _LOCAL["records"]
 
 
 def parse_json(payload: str | bytes) -> dict:
@@ -72,8 +102,9 @@ def parse_json(payload: str | bytes) -> dict:
             payload = payload.decode("utf-8-sig")
         except UnicodeError as exc:
             raise DataProblem("Use UTF-8 JSON text.") from exc
-    if len(payload.encode("utf-8")) > MAX_JSON_MB * 1024 * 1024:
-        raise DataProblem(f"Use JSON smaller than {MAX_JSON_MB} MB.")
+    max_mb = limits.cap("json_mb")
+    if max_mb is not None and len(payload.encode("utf-8")) > max_mb * 1024 * 1024:
+        raise DataProblem(f"Use JSON smaller than {max_mb} MB. {limits.DEMO_NOTE}")
     payload = payload.strip().lstrip("\ufeff")
     fence = re.fullmatch(r"```(?:json)?\s*\n(.*?)\n```", payload, re.S | re.I)
     if fence:
@@ -92,6 +123,8 @@ def parse_json(payload: str | bytes) -> dict:
 
     try:
         parsed = json.loads(payload, object_pairs_hook=pairs, parse_constant=invalid_number)
+    except MemoryError as exc:
+        raise DataProblem(limits.MEMORY_MESSAGE) from exc
     except json.JSONDecodeError as exc:
         raise DataProblem(f"JSON syntax error at line {exc.lineno}, column {exc.colno}: {exc.msg}. Paste just the JSON object.") from exc
     except (RecursionError, ValueError) as exc:
@@ -130,15 +163,19 @@ def assessment_key(competitor: str, criterion: str) -> str:
 
 
 def validate_data(data: dict) -> dict:
-    # Fail fast on oversized collections before validating every record against the full schema.
+    schema = active_schema()
+    # Public demo: fail fast on oversized collections before validating every record against the full schema.
     if isinstance(data, dict):
-        for name, spec in SCHEMA["properties"].items():
+        for name, spec in schema["properties"].items():
             if "maxItems" in spec and isinstance(data.get(name), list) and len(data[name]) > spec["maxItems"]:
-                raise DataProblem(f"{name}: at most {spec['maxItems']} records are allowed; found {len(data[name])}.")
-    errors = sorted(Draft202012Validator(SCHEMA, format_checker=FormatChecker()).iter_errors(data),
+                raise DataProblem(f"{name}: at most {spec['maxItems']} records are allowed; found {len(data[name])}. "
+                                  + limits.DEMO_NOTE)
+    errors = sorted(Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(data),
                     key=lambda e: str(list(e.absolute_path)))
     if errors:
         details = [f"{' / '.join(map(str, e.absolute_path)) or 'root'}: {e.message}" for e in errors[:8]]
+        if any(e.validator in {"maxLength", "maxItems"} for e in errors):
+            details.append(limits.DEMO_NOTE)
         raise DataProblem("Invalid research format:\n" + "\n".join(details))
     data = deepcopy(data)
     maps = {}
@@ -215,8 +252,9 @@ def restore_project(payload: str | bytes) -> dict:
     if set(project) != required or project["format"] != "rivalsignal-project-v1":
         raise DataProblem("This is not a Rival Signal saved project. Use AI import for a research JSON response.")
     project["data"] = validate_data(project["data"])
-    if not isinstance(project["provenance"], str) or len(project["provenance"]) > 200:
-        raise DataProblem("Invalid project provenance label.")
+    longest = limits.chars("provenance")
+    if not isinstance(project["provenance"], str) or (longest is not None and len(project["provenance"]) > longest):
+        raise DataProblem("Invalid project provenance label." + (f" {limits.DEMO_NOTE}" if longest else ""))
     if not isinstance(project["policy"], dict) or set(project["policy"]) != {"max_age_days"}:
         raise DataProblem("Saved project needs its freshness policy.")
     age = project["policy"]["max_age_days"]
@@ -227,8 +265,7 @@ def restore_project(payload: str | bytes) -> dict:
         raise DataProblem("Invalid saved reviews.")
     keys = {"claims": {c["id"] for c in project["data"]["claims"]},
             "assessments": {assessment_key(a["competitor_id"], a["criterion_id"]) for a in project["data"]["assessments"]}}
-    review_schema = obj({"status": enum("pending", "accepted", "rejected"), "reviewer": text(120, 0),
-                         "note": text(1500, 0), "checked_on": DATE})
+    review_schema = REVIEW if limits.public() else _LOCAL["review"]
     for kind in keys:
         if not isinstance(reviews[kind], dict) or not set(reviews[kind]) <= keys[kind]:
             raise DataProblem(f"Saved {kind} reviews refer to missing records.")

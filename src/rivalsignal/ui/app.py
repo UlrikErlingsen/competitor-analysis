@@ -4,6 +4,7 @@ from __future__ import annotations
 from copy import deepcopy
 from datetime import date, datetime
 from html import escape
+from itertools import count
 import json
 import os
 from zoneinfo import ZoneInfo
@@ -12,13 +13,13 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from rivalsignal import __version__
+from rivalsignal import __version__, limits
 from rivalsignal.analysis import analyze_project, assessment_readiness, claim_readiness, compare_projects, fingerprint, response_audit, set_review
 from rivalsignal.examples import demo_data, demo_project
 from rivalsignal.exports import evidence_pack, printable_html, project_bytes
 from rivalsignal.prompts import build_research_prompt, repair_prompt, research_skeleton
 from rivalsignal.research import LIMITS, SOURCES, SCOPE
-from rivalsignal.schema import (DataProblem, MAX_JSON_MB, SCHEMA, assessment_key, import_research, new_project,
+from rivalsignal.schema import (DataProblem, active_schema, assessment_key, import_research, new_project,
                                 restore_project, validate_data)
 from rivalsignal.ui import signal_theme as sig
 
@@ -97,11 +98,13 @@ def brief_and_prompt():
         st.info("Starting a case replaces the active evidence and reviews in this session. Download the current project first if you want to keep it.")
         rev = revision()
         with st.form(k("brief_form:" + rev)):
-            focal = st.text_input("Your company or offering", data["brief"]["focal_company"], max_chars=120,
+            focal = st.text_input("Your company or offering", data["brief"]["focal_company"], max_chars=limits.chars("name"),
                                   key=k("brief_focal:" + rev))
-            market = st.text_area("Customer need, geography and market boundary", data["brief"]["market"], max_chars=600,
+            market = st.text_area("Customer need, geography and market boundary", data["brief"]["market"],
+                                  max_chars=limits.chars("paragraph"),
                                   key=k("brief_market:" + rev))
-            decision = st.text_area("The strategic move you are considering", data["brief"]["decision"], max_chars=1000,
+            decision = st.text_area("The strategic move you are considering", data["brief"]["decision"],
+                                    max_chars=limits.chars("decision"),
                                     key=k("brief_decision:" + rev))
             c1, c2 = st.columns(2)
             as_of = c1.date_input("Research cutoff", date.fromisoformat(data["brief"]["as_of"]), key=k("brief_as_of:" + rev))
@@ -127,7 +130,8 @@ def brief_and_prompt():
     st.markdown("**Active research brief**")
     st.text(f"{data['brief']['focal_company']}\n{data['brief']['market']}\n{data['brief']['decision']}\n"
             f"As of {data['brief']['as_of']} · {data['brief']['horizon_days']}-day response horizon")
-    notes = st.text_area("Optional source links or source material to include in the prompt", height=100, max_chars=25000,
+    notes = st.text_area("Optional source links or source material to include in the prompt", height=100,
+                         max_chars=limits.cap("source_material_chars"),
                          help="Anything entered here is included in the prompt you manually copy to your chosen AI.", key=k("prompt_notes"))
     prompt = build_research_prompt(data["brief"], data["criteria"], data["competitors"], notes)
     st.markdown("1. Copy the prompt below into your preferred AI and enable its web research if available.\n"
@@ -137,7 +141,7 @@ def brief_and_prompt():
         st.code(prompt, language="text", height=360)
     c1, c2 = st.columns(2)
     c1.download_button("Download research prompt", prompt, "rival-research-prompt.txt", "text/plain", key=k("prompt_download"))
-    c2.download_button("Download JSON schema", json.dumps(SCHEMA, indent=2), "rival-research.schema.json", "application/json", key=k("schema_download"))
+    c2.download_button("Download JSON schema", json.dumps(active_schema(), indent=2), "rival-research.schema.json", "application/json", key=k("schema_download"))
     st.caption("No API key is needed. Copying is manual: the app never submits the prompt or any of your data to an AI provider.")
 
 
@@ -155,10 +159,13 @@ def _import_draft():
     with st.expander("Paste or upload an AI research response", expanded=not project()["data"]["claims"]):
         method = st.radio("Research input", ["Paste JSON", "Upload JSON"], horizontal=True, key=k("input_method"))
         if method == "Paste JSON":
-            raw = st.text_area("AI response", height=230, max_chars=1_000_000, key=k("ai_response"))
+            raw = st.text_area("AI response", height=230, max_chars=limits.cap("paste_chars"), key=k("ai_response"))
         else:
             uploaded = st.file_uploader("Research JSON", type=["json"], key=k("research_upload"))
             raw = uploaded.getvalue() if uploaded else b""
+        if limits.public():
+            st.caption(f"Public demo: pasted replies up to {limits.DEMO['paste_chars']:,} characters, files up to "
+                       f"{limits.DEMO['json_mb']} MB. The downloaded app has no limits.")
         raw_text = raw.decode("utf-8-sig", errors="replace") if isinstance(raw, bytes) else raw
         digest = fingerprint(raw_text)
         if st.button("Validate AI response", type="primary", key=k("validate_import")):
@@ -196,8 +203,8 @@ def _review_form(kind, record_id):
     with st.form(k(form)):
         status = st.selectbox("Review decision", STATUS, index=STATUS.index(review.get("status", "pending")),
                               key=k(form + ":status"))
-        reviewer = st.text_input("Reviewed by", review.get("reviewer", ""), max_chars=120, key=k(form + ":reviewer"))
-        note = st.text_area("What did you check?", review.get("note", ""), max_chars=1500, key=k(form + ":note"),
+        reviewer = st.text_input("Reviewed by", review.get("reviewer", ""), max_chars=limits.chars("name"), key=k(form + ":reviewer"))
+        note = st.text_area("What did you check?", review.get("note", ""), max_chars=limits.chars("statement"), key=k(form + ":note"),
                             help="For claims, record whether the source supports the wording and date. For assessments, explain the coding against the definition.")
         if st.form_submit_button("Save review", type="primary", key=k(form + ":save")):
             replace_project(set_review(project(), kind, record_id, status, reviewer, note, today().isoformat()))
@@ -277,7 +284,7 @@ def review():
                                             index=["yes", "no", "unknown"].index(row["judgment"]))
                     ids = [c["id"] for c in data["claims"] if c["competitor_id"] == row["competitor_id"]]
                     refs = st.multiselect("Supporting observations", ids, default=row["claim_ids"], key=k(form + ":refs"))
-                    rationale = st.text_area("Coding rationale", row["rationale"], max_chars=1200, key=k(form + ":rationale"))
+                    rationale = st.text_area("Coding rationale", row["rationale"], max_chars=limits.chars("reasoning"), key=k(form + ":rationale"))
                     if st.form_submit_button("Save correction and reset its review", key=k(form + ":save")):
                         updated = deepcopy(project())
                         target = next(a for a in updated["data"]["assessments"] if assessment_key(a["competitor_id"], a["criterion_id"]) == selected)
@@ -295,7 +302,8 @@ def rival_map():
     st.text(project()["data"]["brief"]["focal_company"] + " · " + project()["data"]["brief"]["market"])
     fig = go.Figure()
     colors = sig.colorway(NS)
-    for index, row in result["profiles"].iterrows():
+    shown = limits.DISPLAY["map_rivals"]
+    for index, row in result["profiles"].head(shown).iterrows():
         x0, x1, y0, y1 = row.market_low, row.market_high, row.resource_low, row.resource_high
         color = colors[index % len(colors)]
         complete = abs(x1 - x0) < 1e-8 and abs(y1 - y0) < 1e-8
@@ -312,6 +320,9 @@ def rival_map():
     fig.update_xaxes(title="Market overlap · weighted coding (%)", range=[-5, 110], dtick=25)
     fig.update_yaxes(title="Capability resemblance · weighted coding (%)", range=[-5, 110], dtick=25)
     sig.chart(NS, fig, key=k("map_chart"))
+    if len(result["profiles"]) > shown:
+        st.info(f"The chart shows the first {shown} of {len(result['profiles'])} rivals to stay readable. "
+                "The table below, the analysis and every export include all of them.")
     st.caption("A box spans the range left unresolved by missing, stale, inferred or unreviewed evidence. "
                "Its label sits at the center only for readability; the center is not an estimate. A dot means all coding is resolved. "
                "A box can collapse to a line when just one dimension is unresolved.")
@@ -340,7 +351,11 @@ def response_lab():
     st.text("Our proposed move: " + data["brief"]["decision"])
     if len(hypotheses) < 2:
         st.info("Add at least two plausible alternatives for this rival. Consider no immediate response, not only an aggressive reaction.")
-    for response in hypotheses:
+    shown = limits.DISPLAY["hypotheses"]
+    if len(hypotheses) > shown:
+        st.info(f"Showing the first {shown} of {len(hypotheses)} hypotheses for this rival. "
+                "Edit any of them below; the printable brief and exports include all of them.")
+    for response in hypotheses[:shown]:
         audit = response_audit(project(), response)
         with st.container(border=True):
             st.text(response["id"] + " · " + response["response"])
@@ -380,27 +395,30 @@ def response_lab():
         current = next((r for r in hypotheses if r["id"] == chosen), {})
         form = "response_form:" + selected + ":" + chosen + ":" + revision()
         with st.form(k(form)):
-            title = st.text_input("Possible competitor response", current.get("response", ""), max_chars=400,
+            title = st.text_input("Possible competitor response", current.get("response", ""),
+                                  max_chars=limits.chars("response"),
                                   key=k(form + ":response"))
-            fields = {label: st.text_area(label.title(), current.get(label, ""), max_chars=1200, key=k(form + ":" + label))
+            fields = {label: st.text_area(label.title(), current.get(label, ""), max_chars=limits.chars("reasoning"),
+                                           key=k(form + ":" + label))
                       for label in ["awareness", "motivation", "capability"]}
             claim_ids = [c["id"] for c in data["claims"] if c["competitor_id"] == selected]
             support = st.multiselect("Supporting claim IDs", claim_ids, default=current.get("supporting_claim_ids", []),
                                      key=k(form + ":support"))
             counter = st.multiselect("Counterevidence claim IDs", claim_ids, default=current.get("counter_claim_ids", []),
                                      key=k(form + ":counter"))
-            watch = st.text_area("Observable watch signal", current.get("watch_for", ""), max_chars=1200,
+            watch = st.text_area("Observable watch signal", current.get("watch_for", ""), max_chars=limits.chars("reasoning"),
                                  key=k(form + ":watch_for"))
-            contingency = st.text_area("Our contingency", current.get("our_contingency", ""), max_chars=1200,
+            contingency = st.text_area("Our contingency", current.get("our_contingency", ""),
+                                       max_chars=limits.chars("reasoning"),
                                        key=k(form + ":our_contingency"))
-            owner = st.text_input("Responsible owner", current.get("owner", ""), max_chars=120, key=k(form + ":owner"))
+            owner = st.text_input("Responsible owner", current.get("owner", ""), max_chars=limits.chars("name"), key=k(form + ":owner"))
             next_check = st.text_input("Next check · YYYY-MM-DD, or leave blank", current.get("next_check") or "",
                                        key=k(form + ":next_check"))
             if st.form_submit_button("Save hypothesis", type="primary", key=k(form + ":save")):
                 updated = deepcopy(project())
                 if chosen == "New hypothesis":
                     used = {r["id"] for r in data["responses"]}
-                    new_id = next(f"H{i}" for i in range(1, 1000) if f"H{i}" not in used)
+                    new_id = next(f"H{i}" for i in count(1) if f"H{i}" not in used)
                 else:
                     new_id = chosen
                 entry = {"id": new_id, "competitor_id": selected, "response": title, **fields,
@@ -481,9 +499,15 @@ def research_limits():
     st.subheader("Limits to keep beside the output")
     for item in LIMITS:
         st.markdown("- " + item)
-    st.caption(f"Inputs: UTF-8 JSON up to {MAX_JSON_MB} MB; at most 12 competitors, 24 criteria, 100 sources, 300 claims "
-               "and 36 hypotheses. "
-               "Everything stays in session memory until you explicitly download a file. There is no automatic persistence.")
+    if limits.public():
+        d = limits.DEMO
+        st.caption(f"Public demo limits: UTF-8 JSON up to {d['json_mb']} MB and pasted replies up to "
+                   f"{d['paste_chars']:,} characters; at most {d['competitors']} competitors, {d['criteria']} criteria, "
+                   f"{d['sources']} sources, {d['claims']} claims and {d['responses']} hypotheses. "
+                   "The downloaded app has none of these limits.")
+    else:
+        st.caption("Inputs: UTF-8 JSON with no size, record or text-length limit; your computer's memory is the limit.")
+    st.caption("Everything stays in session memory until you explicitly download a file. There is no automatic persistence.")
 
 
 PAGES = {"Overview": overview, "1 · Brief & AI prompt": brief_and_prompt, "2 · Import & review": review,
@@ -513,4 +537,6 @@ def render():
         PAGES[page]()
     except DataProblem as exc:
         st.error(str(exc))
+    except MemoryError:
+        st.error(limits.MEMORY_MESSAGE)
     sig.footer(NS, __version__, "competitive reasoning, with evidence in view")
