@@ -23,8 +23,8 @@ The app does not send the prompt anywhere. If a reply fails validation, a repair
 
 ## 3. Import
 
-1. Parse: one JSON object, UTF-8, at most 50 MB, no duplicate keys, no `NaN` or `Infinity`.
-2. Record counts against the schema limits, then JSON Schema draft 2020-12 validation with date formats.
+1. Parse: one JSON object, UTF-8, no duplicate keys, no `NaN` or `Infinity`. There is no size limit locally; a public demo (`SIGNAL_PUBLIC=1`) caps it at 10 MB.
+2. JSON Schema draft 2020-12 validation with date formats. Locally the schema has no length or count limits; in a public demo record counts are checked first against the demo caps, then field lengths.
 3. Cross-checks: unique IDs and names, both dimensions present, finite weights, safe public links, date order (published ≤ accessed ≤ as-of; observed ≤ as-of), references that exist and concern the same rival, no claim as both support and counterevidence.
 4. Scope check: when the user started the case from their own brief in this session, the reply must return the brief, criteria and rivals unchanged.
 

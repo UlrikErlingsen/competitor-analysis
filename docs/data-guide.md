@@ -7,15 +7,28 @@ Rival Signal reads one kind of input: a UTF-8 JSON object describing one competi
 
 The app's **1 · Brief & AI prompt** page downloads the exact prompt and the JSON schema (`rival-research.schema.json`). **2 · Import & review** downloads a complete fictional reply to practise with.
 
-## Size limits
+## Data limits
 
-- Uploaded files: 50 MB (the local upload cap; `RIVALSIGNAL_MAX_UPLOAD_MB` changes it in the launchers). The parser applies the same 50 MB limit to pasted text and uploads.
-- Pasted replies: 1,000,000 characters. A browser text box is not a good place for more; upload the file instead.
-- Records: 2–24 criteria (at least one market and one resource criterion), 1–12 competitors, 100 sources, 300 claims, 288 assessments (12 × 24) and 36 response hypotheses. A file with more records is rejected straight away with the count.
-- Text fields have length limits (for example 1,500 characters for a claim statement and 2,000 for a URL); the schema lists every one.
-- In the prompt, optional source material you add is cut at 25,000 characters. The repair prompt includes the first 100,000 characters of the failed reply and the first 8,000 characters of the error list. These keep the prompts within what assistants accept; they do not limit what the app can import.
+**Run locally** (standalone, a local Signal Hub or an internal deployment), the app sets no limits: no maximum file size, number of criteria, rivals, sources, claims, assessments or hypotheses, text length, pasted text, or prompt length. Your computer's memory is the limit; if it runs out, the app says so plainly. Streamlit's upload cap is 10,000 MB (`RIVALSIGNAL_MAX_UPLOAD_MB` in the launchers, `STREAMLIT_SERVER_MAX_UPLOAD_SIZE` in Docker). Very long pasted text is limited only by the browser and Streamlit's message size; upload a file instead.
 
-A typical reply is tens of kilobytes; the fictional demo is about 15 KB. The record limits, not the byte cap, are what keep a case small: every claim and cell needs a human check.
+The method needs at least two criteria, with at least one market and one resource criterion, and at least one rival. Those are the only count rules.
+
+A typical reply is tens of kilobytes; the fictional demo is about 15 KB. On screen, the map chart shows the first 25 rivals and the response lab the first 25 hypotheses per rival, each with a note; tables, the analysis, the printable brief and the evidence pack always include everything. In practice the limit is how much your team can review, because every claim and cell needs a human check.
+
+**A public demo** (`SIGNAL_PUBLIC=1`) applies these hard caps, and its messages say they are demo limits:
+
+| What | Demo cap |
+|---|---|
+| JSON file or pasted text | 10 MB |
+| Pasted AI reply | 1,000,000 characters |
+| Criteria / rivals | 24 / 12 |
+| Sources / claims / assessments / hypotheses | 100 / 300 / 288 / 36 |
+| IDs cited by one record | 20 |
+| Text fields | 120 characters for names, labels, owners and reviewers; 600 for market, definitions and descriptions; 1,000 for the decision; 300 for source titles; 2,000 for URLs; 150 for publishers; 100 for origin groups; 1,500 for claim statements and review notes; 400 for a response; 1,200 for rationales and response reasoning; 200 for the provenance label |
+| Source material added to the prompt | 25,000 characters |
+| Failed reply / error list quoted in the repair prompt | 100,000 / 8,000 characters |
+
+All caps are defined in `src/rivalsignal/limits.py`. The downloadable schema reflects the mode the app runs in.
 
 ## Research draft
 
@@ -42,7 +55,7 @@ Use `[]` for an empty collection and `null` for an unknown optional date. Every 
 
 | Field | Meaning |
 |---|---|
-| `focal_company` | Your company or offering (up to 120 characters) |
+| `focal_company` | Your company or offering |
 | `market` | Customer need, geography and market boundary |
 | `decision` | The move you are considering |
 | `as_of` | Evidence cutoff: nothing may be observed or accessed after it |
@@ -55,7 +68,7 @@ Use `[]` for an empty collection and `null` for an unknown optional date. Every 
 | `id` | e.g. `M1`, `R1` |
 | `dimension` | `market` (a market you serve) or `resource` (a capability you have) |
 | `label`, `definition` | Short name and what counts as a match |
-| `weight` | Positive, finite, at most 1,000. Normalised within its dimension |
+| `weight` | Positive, finite, at most 1,000 (a value range, not a data limit). Normalised within its dimension |
 
 ### `competitors`
 
@@ -82,7 +95,7 @@ The app never opens these links. It shows them as buttons for you to check, and 
 | `topic` | `market`, `resource`, `move` or `other` |
 | `statement` | In your own words, not a long quotation |
 | `observed_date` | When the underlying event or evidence happened, not when it was retrieved; `null` if unknown; never after `as_of`. A future plan is an announcement dated when it was announced |
-| `source_ids` | Up to 20 sources. An observation needs at least one |
+| `source_ids` | Cited sources. An observation needs at least one |
 
 ### `assessments`
 
@@ -99,7 +112,7 @@ Coding rules from the prompt: market "yes" needs demonstrated participation in t
 The app explains the first problems it finds and offers a repair prompt. A draft is rejected when:
 
 - it is not a single JSON object (prose around it, a list, `NaN` or `Infinity`), or a key appears twice in one object; a Markdown code fence around the JSON is accepted;
-- a field is missing, has the wrong type or length, or an extra field is present;
+- a field is missing, has the wrong type, or an extra field is present (in a public demo, also a field or collection above a demo cap);
 - IDs repeat, competitor names repeat, or a brief field is blank;
 - the criteria do not include both a market and a resource criterion;
 - a claim cites an unknown source or rival, an observation has no source, or evidence is dated after `as_of`;
@@ -125,7 +138,7 @@ Passing validation means the structure and references are consistent. It says no
 }
 ```
 
-Review statuses are `pending`, `accepted` or `rejected`. An accepted review needs a reviewer name (up to 120 characters) and a note (up to 1,500) saying what was checked. Assessment reviews are keyed `competitor_id/criterion_id`. The age limit is 1–3,650 days. The review date is set by the app from today's date in Norwegian time.
+Review statuses are `pending`, `accepted` or `rejected`. An accepted review needs a reviewer name and a note saying what was checked. Assessment reviews are keyed `competitor_id/criterion_id`. The age limit is 1–3,650 days. The review date is set by the app from today's date in Norwegian time.
 
 Restoring checks the format, the research, every review and that each review refers to an existing record. It does not recheck sources or authenticate who reviewed them. Feeding a saved project into the research import is refused, so reviews cannot slip in through the AI route.
 

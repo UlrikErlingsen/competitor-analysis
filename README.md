@@ -32,7 +32,7 @@ Everything runs locally with open-source Python packages. There is no account, t
 
 **Version 1.0 supports:**
 
-- a research brief (focal company, market boundary, planned move, as-of date, response horizon) with 2–24 weighted market and resource criteria and 1–12 named rivals, including indirect rivals, potential entrants and substitutes;
+- a research brief (focal company, market boundary, planned move, as-of date, response horizon) with weighted market and resource criteria (at least one of each) and any number of named rivals, including indirect rivals, potential entrants and substitutes;
 - a copyable research prompt and JSON schema for any AI assistant, with the brief, criteria, rivals and an all-unknown skeleton embedded, and a repair prompt when a reply fails validation;
 - strict import of the reply: JSON Schema validation, cross-reference checks, date logic, safe public links, and rejection of any reply that changes the brief, criteria or rivals you set;
 - human review of each claim and each coding cell, with reviewer, note and date, and an evidence age limit based on when the evidence was observed, not when the page was opened;
@@ -58,21 +58,27 @@ The demo is invented data generated in code. FjordDesk, RoutePilot, SuiteWorks, 
 
 One UTF-8 JSON object per case, pasted or uploaded. A research reply follows `schema_version` 1.0 with seven parts:
 
-| Part | One record per | Key fields | Limit |
+| Part | One record per | Key fields | Required |
 |---|---|---|---|
 | `brief` | case | `focal_company`, `market`, `decision`, `as_of`, `horizon_days` | 1 |
-| `criteria` | comparison criterion | `id`, `dimension` (`market` or `resource`), `label`, `definition`, `weight` | 2–24, both dimensions |
-| `competitors` | rival or substitute | `id`, `name`, `type` (`direct`, `indirect`, `potential`, `substitute`), `description` | 1–12 |
-| `sources` | source document | `id`, `title`, `url`, `publisher`, `published_date`, `accessed_date`, `origin_group` | 100 |
-| `claims` | statement about one rival | `id`, `competitor_id`, `kind` (`observation` or `inference`), `topic`, `statement`, `observed_date`, `source_ids` | 300 |
-| `assessments` | rival × criterion | `competitor_id`, `criterion_id`, `judgment` (`yes`, `no`, `unknown`), `claim_ids`, `rationale` | 288 |
-| `responses` | response hypothesis | `id`, `competitor_id`, `response`, `awareness`, `motivation`, `capability`, `supporting_claim_ids`, `counter_claim_ids`, `watch_for`, `our_contingency`, `owner`, `next_check` | 36 |
+| `criteria` | comparison criterion | `id`, `dimension` (`market` or `resource`), `label`, `definition`, `weight` | 2 or more, both dimensions |
+| `competitors` | rival or substitute | `id`, `name`, `type` (`direct`, `indirect`, `potential`, `substitute`), `description` | 1 or more |
+| `sources` | source document | `id`, `title`, `url`, `publisher`, `published_date`, `accessed_date`, `origin_group` | 0 or more |
+| `claims` | statement about one rival | `id`, `competitor_id`, `kind` (`observation` or `inference`), `topic`, `statement`, `observed_date`, `source_ids` | 0 or more |
+| `assessments` | rival × criterion | `competitor_id`, `criterion_id`, `judgment` (`yes`, `no`, `unknown`), `claim_ids`, `rationale` | 0 or more; missing cells are unknown |
+| `responses` | response hypothesis | `id`, `competitor_id`, `response`, `awareness`, `motivation`, `capability`, `supporting_claim_ids`, `counter_claim_ids`, `watch_for`, `our_contingency`, `owner`, `next_check` | 0 or more |
 
-Uploads are capped at 50 MB and pasted replies at 1,000,000 characters; a typical reply is tens of kilobytes, and larger files go through **Upload JSON**. The record limits are deliberate: every claim and cell needs a human check, so a case stays small enough to review one by one. Every key is required and unknown keys are rejected, so a reply cannot add `verified` flags, confidence scores or review statuses.
+Every key is required and unknown keys are rejected, so a reply cannot add `verified` flags, confidence scores or review statuses.
 
 A reply is rejected, with the reason shown, if it is not one JSON object, repeats a key or an ID, cites an unknown source, claim, rival or criterion, has an observation without a source, links an assessment or response to another rival's claims, lists a claim as both support and counterevidence, dates evidence after the as-of date, has a source accessed after the as-of date or published after it was accessed, or links to a non-public or credential-bearing URL. If you started a case from your own brief in the session, a reply that changes the brief, criteria or rivals is also rejected.
 
 A saved project (`rivalsignal-project-v1`) wraps the same research with your review decisions, the evidence age limit and a provenance label. Restoring it keeps your reviews; importing research never does.
+
+### Data limits
+
+Run on your own computer, Rival Signal sets no limit on file size, number of rivals, criteria, sources, claims or hypotheses, text length or pasted text; your computer's memory is the limit, and running out of memory gives a plain message instead of a crash. Streamlit's upload cap is set to 10,000 MB. A typical reply is tens of kilobytes. Very large cases stay usable on screen: the map chart shows the first 25 rivals and the response lab the first 25 hypotheses per rival, each with a note, while tables, the analysis and every export keep everything. Every claim and cell still needs a human check, so the practical limit is how much you can review.
+
+A public demo (`SIGNAL_PUBLIC=1`) applies hard caps to protect a shared server: 10 MB of JSON, 1,000,000 pasted characters, 12 rivals, 24 criteria, 100 sources, 300 claims, 36 hypotheses, 20 cited IDs per record and per-field text lengths. Those messages say they are demo limits. All caps live in `src/rivalsignal/limits.py`.
 
 See the [data guide](docs/data-guide.md).
 
@@ -132,7 +138,7 @@ python -m pip install -r requirements.txt
 python -m streamlit run app.py
 ```
 
-Rival Signal prefers local port 8598; the macOS launcher falls back to another free port if it is taken. Both launchers accept `RIVALSIGNAL_PORT` and `RIVALSIGNAL_MAX_UPLOAD_MB` (default 50), and the macOS launcher also accepts `RIVALSIGNAL_NO_BROWSER=1`. Started from a terminal, the app reads the same 50 MB cap from `.streamlit/config.toml`.
+Rival Signal prefers local port 8598; the macOS launcher falls back to another free port if it is taken. Both launchers accept `RIVALSIGNAL_PORT` and `RIVALSIGNAL_MAX_UPLOAD_MB` (default 10000), and the macOS launcher also accepts `RIVALSIGNAL_NO_BROWSER=1`. Started from a terminal, the app reads the same 10,000 MB upload cap from `.streamlit/config.toml`.
 
 ### Docker
 
@@ -141,7 +147,7 @@ docker build -t rivalsignal .
 docker run --rm -p 8598:8598 rivalsignal
 ```
 
-Then open http://127.0.0.1:8598. The container runs as a non-root user and sets the upload cap with `STREAMLIT_SERVER_MAX_UPLOAD_SIZE=50`; pass `-e STREAMLIT_SERVER_MAX_UPLOAD_SIZE=<MB>` to change it.
+Then open http://127.0.0.1:8598. The container runs as a non-root user and sets the upload cap with `STREAMLIT_SERVER_MAX_UPLOAD_SIZE=10000`; pass `-e STREAMLIT_SERVER_MAX_UPLOAD_SIZE=<MB>` to change it.
 
 ## Privacy
 
@@ -160,7 +166,7 @@ python -m ruff check .
 python -m build
 ```
 
-The analysis core installs without Streamlit or Plotly; `pip install -e ".[ui]"` adds the app dependencies. Tests cover the draft-only import, two-step review before a cell resolves, the demo's known bounds, per-dimension weight normalisation, evidence ageing, unsafe links, scope drift and inconsistent references, the 50 MB and record limits, project round trips, snapshot comparability, escaped HTML and spreadsheet-safe CSV, every Streamlit page and its main flows, and the Signal Hub contract (`rivalsignal.ui.render`, namespaced keys, Hub mode, no network or file calls, no repo-root file reads).
+The analysis core installs without Streamlit or Plotly; `pip install -e ".[ui]"` adds the app dependencies. Tests cover the draft-only import, two-step review before a cell resolves, the demo's known bounds, per-dimension weight normalisation, evidence ageing, unsafe links, scope drift and inconsistent references, no data limits locally and hard caps with `SIGNAL_PUBLIC=1`, project round trips, snapshot comparability, escaped HTML and spreadsheet-safe CSV, every Streamlit page and its main flows, and the Signal Hub contract (`rivalsignal.ui.render`, namespaced keys, Hub mode, no network or file calls, no repo-root file reads).
 
 ## Where this fits in Signal
 

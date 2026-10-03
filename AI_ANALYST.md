@@ -51,11 +51,11 @@ Ask for and confirm:
 - **Decision:** the move being considered.
 - **As-of date:** the evidence cutoff. Nothing may be observed or accessed after it.
 - **Response horizon** in days, and an **evidence age limit** (default 180 days).
-- **Criteria**, 2 to 24, each with an ID, a dimension, a label, a definition a reviewer can apply, and a positive weight:
+- **Criteria**, at least two, each with an ID, a dimension, a label, a definition a reviewer can apply, and a positive weight:
   - `market` criteria describe markets *the user* serves (customer groups, use cases, regions);
   - `resource` criteria describe capabilities *the user* has (product functions, implementation, partnerships);
   - include at least one of each.
-- **Rivals**, 1 to 12, each typed `direct`, `indirect`, `potential` or `substitute`. Ask what customers could use instead, including a manual workaround or doing nothing.
+- **Rivals**, one or more, each typed `direct`, `indirect`, `potential` or `substitute`. Ask what customers could use instead, including a manual workaround or doing nothing.
 
 Once confirmed, the brief, criteria and rivals are fixed. Do not add rivals or change definitions without the user restarting the brief.
 

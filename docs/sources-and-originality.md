@@ -18,7 +18,7 @@ The same list ships inside the app (**Research & limits**), in the printable bri
 - **Montgomery, Moore and Urbany (2005)** report, across three exploratory studies, limited strategic reasoning by executives about competitors' reactions, alongside difficulty obtaining information and uncertainty about behaviour. Rival Signal asks for competing hypotheses, counterevidence and observable signals before a reaction is chosen. That is a reasoning aid, not evidence that it improves forecasts.
 - **Jaźwińska and Chandrasekar (2025)**, a Tow Center report in the *Columbia Journalism Review*, found citation and attribution errors when generative search tools were asked to identify news articles. It is not peer-reviewed and not about competitor research. Rival Signal takes from it only the practical point that AI-sourced research needs a source-alignment check before it counts.
 
-No source validates the app's coding rules, weights, 180-day default age limit, bounds or record limits. Those are transparent design choices.
+No source validates the app's coding rules, weights, 180-day default age limit, bounds or public-demo caps. Those are transparent design choices.
 
 ## Primary references
 
